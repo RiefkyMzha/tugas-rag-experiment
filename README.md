@@ -1,520 +1,501 @@
-# Simple RAG — Document Workspace
+# RAG Parameter Exploration
 
-Aplikasi Retrieval-Augmented Generation (RAG) untuk mengunggah PDF, mengajukan pertanyaan berdasarkan dokumen, dan membuat brief topik dengan referensi sumber. Backend menggunakan FastAPI, embedding lokal dari Sentence Transformers, Qdrant lokal untuk penyimpanan vektor, serta Groq untuk menghasilkan jawaban.
+## Informasi Eksperimen
 
-Website disajikan langsung oleh FastAPI. Frontend menggunakan HTML, CSS, dan JavaScript tanpa proses build, dengan desain **Material 3 Sky Night** dari [DESIGN-SKYNIGHT-SUBTLE.md](DESIGN-SKYNIGHT-SUBTLE.md).
+**Nama PDF:**
 
-## Daftar isi
+6639-Article Text-25282-1-10-20230918.pdf
 
-- [Fitur](#fitur)
-- [Teknologi](#teknologi)
-- [Persiapan](#persiapan)
-- [Instalasi dan menjalankan aplikasi](#instalasi-dan-menjalankan-aplikasi)
-- [Konfigurasi](#konfigurasi)
-- [Penggunaan website](#penggunaan-website)
-- [Format Markdown jawaban](#format-markdown-jawaban)
-- [Cara kerja RAG](#cara-kerja-rag)
-- [Dokumentasi API](#dokumentasi-api)
-- [Struktur proyek](#struktur-proyek)
-- [Penyimpanan dan siklus data](#penyimpanan-dan-siklus-data)
-- [Kustomisasi](#kustomisasi)
-- [Batasan aplikasi](#batasan-aplikasi)
-- [Pemecahan masalah](#pemecahan-masalah)
+**Jumlah halaman PDF:**
 
-## Fitur
+9 page
 
-- Unggah satu PDF melalui pemilih file atau drag-and-drop.
-- Ekstraksi teks per halaman dan pemecahan menjadi potongan berbasis token.
-- Penyimpanan embedding dan metadata dokumen secara lokal.
-- Pertanyaan dengan jawaban berdasarkan konteks yang ditemukan di knowledge base.
-- Brief topik dengan struktur Summary, Key Points, dan Source References.
-- Referensi nama dokumen dan nomor halaman pada jawaban maupun brief.
-- Renderer Markdown untuk heading, bold, italic, daftar, tabel, kutipan, kode, dan format lainnya.
-- Tombol Copy untuk menyalin respons asli beserta sintaks Markdown-nya.
-- Daftar dokumen yang diunggah dalam sesi tab browser.
-- Indikator koneksi API, status pemrosesan, dan pesan kegagalan.
-- Layout responsif dengan palet navy, aksen biru langit, dan font sesuai spesifikasi desain.
-- Dokumentasi API interaktif bawaan FastAPI.
+**Isi / topik PDF secara singkat:**
 
-## Teknologi
+Penelitian ini membuat model machine learning menggunakan algoritma K-nearest neighbors yang diimplementasikan kepada sebuah website untuk memprediksi customer churn dan customer tidak churn guna untuk mempertahankan pelanggan pada perusahaan telekomunikasi. 
 
-| Komponen | Implementasi |
-| --- | --- |
-| Web server dan API | FastAPI, Uvicorn |
-| Frontend | HTML, CSS, JavaScript native |
-| Parser Markdown | Marked 18.1.1, file lokal |
-| Sanitasi HTML | DOMPurify 3.4.17, file lokal |
-| Ekstraksi PDF | PyMuPDF |
-| Pemecahan teks | LangChain RecursiveCharacterTextSplitter dengan tokenizer Hugging Face |
-| Embedding | Sentence Transformers |
-| Model embedding | `sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2` |
-| Database vektor | Qdrant Client dalam mode penyimpanan lokal |
-| Penyedia LLM | Groq melalui `AsyncGroq` |
-| Konfigurasi environment | python-dotenv |
+------------------------------------------------------
 
-## Persiapan
+# Pertanyaan Pengujian
 
-- Python dengan dukungan dependensi di [requirements.txt](requirements.txt). Python 3.11 atau 3.12 dapat dijadikan pilihan awal untuk environment machine learning; versi Python lain bergantung pada dukungan paket yang dipasang.
-- API key Groq yang memiliki akses ke model yang dikonfigurasi.
-- Koneksi internet untuk instalasi paket, pengunduhan model/tokenizer saat belum tersedia di cache, dan permintaan ke Groq.
-- Ruang penyimpanan untuk paket Python, cache model, PDF, dan database Qdrant.
+## Pertanyaan 1
 
-Tidak diperlukan Node.js, npm, atau server Qdrant terpisah untuk konfigurasi saat ini.
+Algoritma machine learning apa yang digunakan peneliti untuk memprediksi customer churn pada perusahaan telekomunikasi, dan berapa persentase akurasi yang dihasilkan dari evaluasi model tersebut? (KNN dan akurasi 81%)
 
-## Instalasi dan menjalankan aplikasi
+## Pertanyaan 2
 
-Jalankan perintah dari direktori proyek yang berisi `main.py`.
+Metode apa yang diterapkan oleh peneliti untuk mengatasi masalah data yang tidak seimbang (imbalancing data) pada dataset sebelum melakukan pemodelan? (SMOTE-NC)
 
-### Windows / PowerShell
+------------------------------------------------------
 
-```powershell
-python -m venv venv
-.\venv\Scripts\Activate.ps1
-python -m pip install --upgrade pip
-python -m pip install -r requirements.txt
-Copy-Item .env.example .env
-```
-
-Jika `.env` sudah ada, gunakan file tersebut; jangan menimpanya saat mengulang instalasi. Isi API key melalui editor:
-
-```dotenv
-GROQ_API_KEY=isi_api_key_groq_anda
-GROQ_MODEL=openai/gpt-oss-120b
-```
-
-Jalankan server:
-
-```powershell
-python -m uvicorn main:app --reload
-```
-
-Jika aktivasi virtual environment diblokir oleh pengaturan PowerShell, panggil interpreter secara langsung:
-
-```powershell
-.\venv\Scripts\python.exe -m pip install -r requirements.txt
-.\venv\Scripts\python.exe -m uvicorn main:app --reload
-```
-
-### Linux / macOS
-
-```bash
-python3 -m venv venv
-source venv/bin/activate
-python -m pip install --upgrade pip
-python -m pip install -r requirements.txt
-cp .env.example .env
-# Edit .env dan isi GROQ_API_KEY sebelum menjalankan server.
-python -m uvicorn main:app --reload
-```
-
-### Alamat aplikasi
-
-| Halaman | Alamat default |
-| --- | --- |
-| Website | http://127.0.0.1:8000/ |
-| Swagger UI | http://127.0.0.1:8000/docs |
-| ReDoc | http://127.0.0.1:8000/redoc |
-| OpenAPI JSON | http://127.0.0.1:8000/openapi.json |
-| Health | http://127.0.0.1:8000/health |
-
-Pada startup pertama, aplikasi memuat model embedding dan tokenizer; proses ini dapat memerlukan pengunduhan sebelum server siap. Untuk mengganti port, tambahkan `--port 8001`. Frontend menggunakan endpoint relatif sehingga otomatis mengikuti host dan port FastAPI.
-
-Untuk menjalankan tanpa pemantauan perubahan kode:
-
-```bash
-python -m uvicorn main:app --host 127.0.0.1 --port 8000
-```
-
-Gunakan satu worker dengan Qdrant lokal karena direktori database dikunci oleh proses yang membukanya.
-
-## Konfigurasi
-
-### Environment variables
-
-Salin [.env.example](.env.example) ke `.env`. File `.env` dimuat oleh `config.py` dan sudah masuk `.gitignore`.
-
-| Nama | Wajib | Nilai / kegunaan |
-| --- | --- | --- |
-| `GROQ_API_KEY` | Ya | API key yang digunakan SDK Groq pada backend |
-| `GROQ_MODEL` | Tidak | Model Groq; default kode saat ini adalah `openai/gpt-oss-120b` |
-
-Nama model default mengikuti konfigurasi proyek. Akses dan ketersediaan model bergantung pada akun Groq; ganti `GROQ_MODEL` dengan model yang tersedia untuk akun Anda bila diperlukan.
-
-API key tidak dikirim ke browser. Permintaan generasi dilakukan oleh backend. Teks konteks yang ditemukan dari dokumen dan pertanyaan/topik dikirim ke Groq untuk menghasilkan respons.
-
-### Parameter di `config.py`
-
-Parameter berikut diatur dalam kode, bukan melalui environment variable:
-
-| Parameter | Nilai saat ini | Fungsi |
-| --- | --- | --- |
-| `UPLOAD_DIR` | `data/uploads/` | Lokasi PDF yang diunggah |
-| `QDRANT_PATH` | `qdrant_data/` | Database vektor lokal |
-| `COLLECTION_NAME` | `rag_documents` | Nama koleksi Qdrant |
-| `EMBEDDING_MODEL` | `sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2` | Model embedding dan tokenizer |
-| `TOP_K` | `4` | Jumlah potongan yang diambil untuk pertanyaan |
-| `BRIEF_TOP_K` | `6` | Jumlah potongan yang diambil untuk brief |
-| `CHUNK_SIZE` | `100` | Target ukuran maksimal potongan berdasarkan tokenizer |
-| `CHUNK_OVERLAP` | `20` | Tumpang tindih token antar potongan |
-
-`llm.py` mengatur temperature generasi ke `0.2`.
-
-Jika model embedding diganti, gunakan koleksi/database yang sesuai dan ingest ulang dokumen. Vektor dari model berbeda tidak semestinya dicampur, bahkan bila dimensinya sama.
-
-## Penggunaan website
-
-### Mengunggah PDF
-
-1. Pilih PDF melalui **browse files** atau seret file ke area **Drop a PDF here**.
-2. Klik **Upload document**.
-3. Tunggu proses pembacaan halaman, chunking, embedding, dan penyimpanan.
-4. Setelah berhasil, dokumen muncul di **Uploaded this session**, beserta jumlah halaman terbaca dan potongan tersimpan.
-
-Gunakan PDF yang memiliki teks yang dapat diseleksi. PDF scan tanpa lapisan teks memerlukan OCR di luar aplikasi ini.
-
-### Mengajukan pertanyaan
-
-1. Pilih tab **Ask a question**.
-2. Masukkan pertanyaan yang spesifik, misalnya `Apa tiga rekomendasi utama dalam laporan ini?`.
-3. Klik **Ask question**, atau tekan `Ctrl+Enter` / `Cmd+Enter`.
-4. Baca respons di **Your answer** dan referensi di **Source references**.
-
-Pertanyaan menelusuri seluruh knowledge base, termasuk dokumen dari sesi sebelumnya. Tidak perlu mengunggah ulang dokumen hanya karena daftar sesi browser kosong.
-
-### Membuat brief
-
-1. Pilih tab **Create a brief**.
-2. Masukkan topik, misalnya `Risiko operasional dan langkah mitigasi`.
-3. Klik **Create brief**, atau tekan `Ctrl+Enter` / `Cmd+Enter`.
-4. Respons ditampilkan pada **Your brief** dengan referensi sumber.
-
-Respons terakhir pada masing-masing tab tetap tersedia selama halaman terbuka. Respons sebelumnya dipertahankan jika permintaan berikutnya gagal. Riwayat percakapan tidak disimpan.
-
-### Status API
-
-Indikator header meminta `/health` ketika halaman dibuka. Tombol refresh memeriksa ulang koneksi. **API online** berarti endpoint health merespons; indikator ini tidak memverifikasi keberhasilan generasi Groq atau kualitas isi knowledge base.
-
-## Format Markdown jawaban
-
-Jawaban dan brief diproses sebagai Markdown dengan GitHub Flavored Markdown (GFM) menggunakan [Marked](https://marked.js.org/). HTML hasil parsing disaring oleh [DOMPurify](https://github.com/cure53/DOMPurify) sebelum ditampilkan.
-
-Format yang didukung:
-
-- Heading `#` sampai `######`.
-- **Bold**, *italic*, ~~strikethrough~~, dan kombinasi penekanan.
-- Daftar bernomor, bullet, daftar bertingkat, dan task list.
-- Tabel dengan heading kolom dan alignment.
-- Kutipan / blockquote dan garis pemisah.
-- Inline code dan blok kode berpagar, termasuk penanda bahasa.
-- Tautan, gambar, serta HTML terbatas seperti `<details>`, `<summary>`, `<sup>`, dan `<sub>`.
-- Pergantian baris biasa ditampilkan sebagai line break.
-
-Contoh output LLM yang dapat dirender:
-
-````markdown
-## Ringkasan
-
-Temuan **utama** adalah peningkatan efisiensi dengan beberapa *catatan*.
-
-| Aspek | Temuan | Prioritas |
-| :--- | :--- | :---: |
-| Proses | Waktu pengerjaan turun | Tinggi |
-| Risiko | Perlu pemantauan berkala | Sedang |
-
-### Tindak lanjut
-
-1. Tinjau rekomendasi.
-2. Tetapkan penanggung jawab.
-
-- [x] Identifikasi masalah
-- [ ] Susun rencana
-
-> Kesimpulan harus tetap merujuk pada dokumen sumber.
-
-Gunakan `TOP_K` untuk mengatur jumlah potongan konteks.
-
-```python
-print("Contoh blok kode")
-```
-````
-
-Tabel lebar dan blok kode memiliki scroll horizontal. Area tabel dapat difokuskan dengan keyboard. Tautan dibuka di tab baru. Checkbox task list ditampilkan sebagai status, bukan kontrol yang bisa diedit.
-
-Tombol **Copy** menyalin respons asli, sehingga sintaks Markdown tetap bisa ditempel ke editor lain. Jika library lokal tidak termuat, respons ditampilkan sebagai teks biasa.
-
-Renderer tidak menjalankan script, CSS arbitrer, iframe, atau event handler dari output LLM. Rumus LaTeX, diagram Mermaid, dan syntax highlighting berwarna belum memiliki renderer khusus; blok kode tetap tampil dengan font monospace. Pemformatan mengikuti isi yang dihasilkan LLM—renderer tidak otomatis mengubah paragraf menjadi tabel.
-
-Library Markdown disimpan pada `static/vendor/`, sehingga rendering tidak memerlukan CDN saat runtime. Font tetap menggunakan Google Fonts dengan fallback sans-serif/monospace jika tidak tersedia.
-
-## Cara kerja RAG
-
-### Pipeline ingestion
+# Baseline Configuration
 
 ```text
-PDF
-  → ekstraksi teks per halaman (PyMuPDF)
-  → pemecahan teks berbasis tokenizer
-  → embedding lokal (Sentence Transformers)
-  → penyimpanan vektor dan metadata di Qdrant
+Temperature:     0.2  
+TOP_K:           4     
+Chunk Size:      100   
+Chunk Overlap:   20    
+Embedding Model: sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2
+LLM Model:       openai/gpt-oss-120b (Groq)
 ```
 
-Setiap potongan menyimpan teks, nama sumber, nomor halaman asli PDF, dan indeks potongan dalam halaman. Halaman tanpa teks dilewati. Karena itu, `pages_read` menghitung halaman yang memiliki teks, bukan selalu total halaman PDF.
+Ingest baseline: `pages_read: 9`, `chunks_stored: 88`
 
-### Pipeline pertanyaan / brief
+------------------------------------------------------
+
+# Experiment 1 - Temperature
+
+Gunakan pertanyaan yang sama pada seluruh percobaan.
+
+## Temperature = 0.0
+
+### Actual Output
+
+**1. Algoritma yang dipakai:** Peneliti menggunakan algoritma **K‑Nearest Neighbors (KNN)** untuk memprediksi churn pelanggan pada perusahaan telekomunikasi 【Source: 6639-Article Text-25282-1-10-20230918.pdf | Page: 1‑2】.  
+
+**Akurasi model:** Persentase akurasi hasil evaluasi model tidak tercantum dalam dokumen yang diunggah, sehingga tidak dapat disampaikan.  
+
+**2. Penanganan data tidak seimbang:** Dokumen tidak menyebutkan metode apa pun yang diterapkan untuk mengatasi masalah data tidak seimbang (imbalancing data) sebelum pemodelan.  
+
+*Jawaban didasarkan pada informasi yang tersedia dalam dokumen; detail yang tidak ada tidak dapat disediakan.
+
+### Observation
+
+Jawaban cukup jelas dan langsung menjawab kedua pertanyaan. Model menyebutkan algoritma KNN, menjelaskan bahwa akurasi tidak tercantum dalam dokumen, dan menyatakan bahwa metode penanganan data tidak seimbang tidak dijelaskan oleh peneliti.
+
+------------------------------------------------------
+
+## Temperature = 0.2
+
+### Actual Output
+
+**1. Algoritma yang dipakai:** Peneliti menggunakan algoritma **K‑nearest neighbors (KNN)** untuk memprediksi churn pelanggan [Source: 6639‑Article Text‑25282‑1‑10‑20230918.pdf, p. 1‑2].
+
+**Akurasi model:** Persentase akurasi hasil evaluasi model tidak tercantum dalam dokumen yang di‑upload.
+
+**2. Penanganan data tidak seimbang:** Dokumen tidak menyebutkan metode apa pun yang diterapkan untuk mengatasi masalah data tidak seimbang (imbalancing data) sebelum pemodelan.
+
+### Observation
+
+Jawaban memiliki isi yang sama dengan temperature 0.0. Perbedaannya hanya pada susunan kalimat dan format sitasi. Tidak ada perubahan informasi yang diberikan, sehingga kedua hasil menunjukkan jawaban yang konsisten pada pengujian ini.
+
+------------------------------------------------------
+
+## Temperature = 0.8
+
+### Actual Output
+
+**1. Algoritma yang dipakai**  
+Peneliti menggunakan algoritma **K‑Nearest Neighbors (K‑NN)** untuk memprediksi apakah pelanggan akan churn atau tidak 【Source: 6639-Article Text-25282-1-10-20230918.pdf | Page: 1】【Source: 6639-Article Text-25282-1-10-20230918.pdf | Page: 2】.  
+
+**Persentase akurasi** – Informasi mengenai nilai akurasi yang diperoleh dari evaluasi model tidak terdapat dalam dokumen yang di‑upload.  
+
+**2. Penanganan data tidak seimbang** – Dokumen tidak menyebutkan metode apa yang diterapkan untuk mengatasi masalah data yang tidak seimbang sebelum pemodelan.  
+
+*Jawaban didasarkan pada isi dokumen yang tersedia; bila ada bagian lain yang memuat detail akurasi atau teknik penanganan imbalancing, informasi tersebut tidak tercakup dalam teks yang diberikan.*
+
+### Observation
+
+Jawaban pada temperature 0.8 masih sama dengan temperature 0.0 dan 0.2. Model tetap menyebutkan algoritma KNN, sementara informasi akurasi dan metode penanganan data tidak seimbang tidak ditemukan di dokumen. Perbedaannya ada di cara penjelasan yang sedikit lebih panjang, terutama pada bagian akhir jawaban. Isi jawabannya tetap sama dan tidak ada perubahan fakta yang terlihat.
+
+------------------------------------------------------
+
+## Kesimpulan Experiment Temperature
+
+Apa perubahan yang paling terlihat?
+
+erubahan yang paling terlihat ada pada cara penyampaian jawaban. Pada temperature 0.0, 0.2, dan 0.8, isi jawaban tetap sama. Model selalu menyebutkan algoritma KNN, tetapi tidak memberikan nilai akurasi dan metode penanganan data tidak seimbang karena informasinya tidak ditemukan di dokumen. Perbedaan hanya terlihat pada susunan kalimat dan panjang jawaban.
+
+Menurut kalian nilai mana yang paling cocok untuk aplikasi RAG ini?
+
+temperature 0.0
+
+Kenapa?
+
+Karena jawaban yang dihasilkan lebih konsisten dan langsung ke inti pertanyaan. Aplikasi RAG membutuhkan jawaban yang sesuai dengan isi dokumen, bukan jawaban yang bervariasi atau terlalu kreatif. Temperature 0.0 juga membantu mengurangi variasi jawaban ketika pengguna mengajukan pertanyaan yang sama.
+
+------------------------------------------------------
+
+# Experiment 2 - TOP_K
+
+## TOP_K = 1
+
+### Actual Output
+
+1. Peneliti menggunakan algoritma **K‑Nearest Neighbors (KNN)** untuk memprediksi churn pelanggan pada perusahaan telekomunikasi【Source: 6639‑Article Text‑25282‑1‑10‑20230918.pdf, p. 1】. Persentase akurasi yang dilaporkan tidak terdapat dalam dokumen yang di‑upload.
+
+2. Metode yang diterapkan untuk mengatasi data tidak seimbang (imbalancing data) sebelum pemodelan tidak disebutkan dalam konteks yang diberikan.
+
+### Sources / Similarity Score
+
+- 6639-Article Text-25282-1-10-20230918.pdf p. 1
+
+### Observation
+
+Jawaban sudah menjawab kedua pertanyaan, tetapi sumber yang digunakan hanya halaman 1. Informasi yang diberikan cukup singkat dan model tidak menambahkan penjelasan lain di luar isi dokumen.
+
+------------------------------------------------------
+
+## TOP_K = 4
+
+### Actual Output
+
+**1. Algoritma yang dipakai:** Peneliti menggunakan algoritma **K‑Nearest Neighbors (KNN)** untuk memprediksi churn pelanggan [Source: 6639‑Article Text‑25282‑1‑10‑20230918.pdf, p. 1‑2].
+
+**Akurasi model:** Persentase akurasi hasil evaluasi model tidak tercantum dalam dokumen yang di‑upload, sehingga tidak dapat disampaikan.
+
+**2. Penanganan data tidak seimbang:** Dokumen tidak menyebutkan metode apa pun (misalnya oversampling, SMOTE, atau teknik penyeimbangan lainnya) yang diterapkan untuk mengatasi masalah data tidak seimbang sebelum pemodelan. Oleh karena itu, informasi tersebut tidak ditemukan dalam sumber yang diberikan.
+
+### Sources / Similarity Score
+
+- 6639-Article Text-25282-1-10-20230918.pdf p. 1
+- 6639-Article Text-25282-1-10-20230918.pdf p. 2
+
+### Observation
+
+Jawaban masih sama dengan TOP_K = 1, tetapi penjelasan tentang metode penanganan data tidak seimbang lebih detail. Sumber yang digunakan mencakup halaman 1 dan 2, tetapi belum ada informasi baru mengenai akurasi atau metode yang dipakai peneliti.
+
+------------------------------------------------------
+
+## TOP_K = 8
+
+### Actual Output
+
+**1. Algoritma yang dipakai**  
+Peneliti menggunakan algoritma **K‑Nearest Neighbors (K‑NN)** untuk memprediksi apakah pelanggan akan churn atau tidak 【Source: 6639-Article Text-25282-1-10-20230918.pdf | Page: 1‑2】.  
+
+**Persentase akurasi** – Dokumen yang diberikan tidak mencantumkan nilai akurasi (atau metrik evaluasi lain) yang diperoleh dari model K‑NN.  
+
+**2. Penanganan data tidak seimbang**  
+Dalam teks yang tersedia tidak ada penjelasan mengenai teknik khusus (mis. oversampling, SMOTE, undersampling, atau penyesuaian bobot) yang diterapkan untuk mengatasi masalah data tidak seimbang sebelum pemodelan.  
+
+*Jawaban: algoritma K‑NN digunakan, tetapi nilai akurasi serta metode penanganan data tidak seimbang tidak ditemukan dalam dokumen yang di‑upload.*
+
+### Sources / Similarity Score
+
+- 6639-Article Text-25282-1-10-20230918.pdf p. 1
+- 6639-Article Text-25282-1-10-20230918.pdf p. 2
+- 6639-Article Text-25282-1-10-20230918.pdf p. 9
+- 6639-Article Text-25282-1-10-20230918.pdf p. 3
+
+### Observation
+
+Jawaban tetap memberikan informasi yang sama seperti dua percobaan sebelumnya. Sumber yang ditemukan bertambah menjadi empat halaman, yaitu halaman 1, 2, 9, dan 3. Namun, tambahan sumber tersebut belum menghasilkan informasi baru yang bisa menjawab bagian akurasi dan metode penanganan data tidak seimbang.
+
+------------------------------------------------------
+
+## Kesimpulan Experiment TOP_K
+
+Apakah TOP_K yang lebih besar selalu menghasilkan jawaban yang lebih baik?
+
+TOP_K yang lebih besar menambah jumlah sumber yang diambil, tetapi isi jawaban tetap sama. Penambahan context belum tentu membuat jawaban lebih lengkap kalau informasi yang dibutuhkan memang tidak ditemukan di dokumen
+
+Menurut kalian TOP_K mana yang paling cocok untuk PDF yang digunakan?
+
+TOP_K = 4, karena sudah cukup mengambil informasi yang relevan dan cukup detail
+
+Kenapa?
+
+arena jawaban yang dihasilkan sudah cukup untuk menjawab pertanyaan, dengan sumber dari dua halaman dokumen. TOP_K = 1 memang lebih singkat, sedangkan TOP_K = 8 mengambil lebih banyak sumber tanpa memberikan informasi tambahan. 
+
+------------------------------------------------------
+
+# Experiment 3 - Chunk Size
+
+Gunakan:
 
 ```text
-Pertanyaan atau topik
-  → embedding query
-  → pencarian similarity di Qdrant
-  → penggabungan potongan sebagai konteks
-  → pengiriman system prompt + konteks ke Groq
-  → respons teks + metadata sumber
-  → rendering Markdown di browser
+CHUNK_OVERLAP = 20
 ```
 
-Pencarian menggunakan cosine similarity. Pertanyaan mengambil maksimal `TOP_K` potongan, sedangkan brief mengambil maksimal `BRIEF_TOP_K` potongan. Referensi sumber dideduplikasi berdasarkan pasangan nama dokumen dan halaman.
+untuk seluruh percobaan.
 
-`score` adalah skor kemiripan hasil pencarian, bukan persentase keyakinan LLM. Daftar `sources` menunjukkan halaman yang masuk ke konteks; daftar ini tidak menjamin setiap klaim jawaban memiliki kutipan individual.
+------------------------------------------------------
 
-## Dokumentasi API
+## Chunk Size = 50
 
-Contoh respons di bawah bersifat ilustratif. Isi jawaban, jumlah potongan, dan skor akan mengikuti dokumen dan hasil model.
+### Chunks Stored
 
-### Ringkasan route
+202 chunks
 
-| Method | Route | Fungsi |
-| --- | --- | --- |
-| `GET` | `/` | Halaman website |
-| `GET` | `/static/{path}` | Asset frontend dan library lokal |
-| `GET` | `/health` | Status dasar API |
-| `POST` | `/ingest` | Unggah dan indeks PDF |
-| `POST` | `/ask` | Pertanyaan berbasis dokumen |
-| `POST` | `/brief` | Brief berdasarkan topik |
-| `GET` | `/docs` | Swagger UI |
-| `GET` | `/redoc` | Dokumentasi ReDoc |
-| `GET` | `/openapi.json` | Skema OpenAPI |
+### Actual Output
 
-### `GET /health`
+**1. Algoritma yang digunakan:** Peneliti menerapkan algoritma **K‑Nearest Neighbors (K‑NN)** untuk membangun model prediksi churn pelanggan pada perusahaan telekomunikasi【Source: 6639-Article Text-25282-1-10-20230918.pdf | Page: 2】.  
 
-```json
-{
-  "status": "OK"
-}
-```
+**Akurasi model:** Persentase akurasi yang diperoleh dari evaluasi model tidak tercantum dalam dokumen yang diunggah, sehingga tidak dapat disampaikan.
 
-### `POST /ingest`
+**2. Penanganan data tidak seimbang:** Dokumen yang disediakan tidak menyebutkan metode apa pun yang digunakan peneliti untuk mengatasi masalah data tidak seimbang (imbalancing data) sebelum pemodelan.  
 
-Kirim `multipart/form-data` dengan field `file` berisi satu PDF. Jangan menggunakan JSON untuk endpoint ini.
+*Jawaban didasarkan pada informasi yang tersedia dalam dokumen; detail yang tidak ada tidak dapat disimpulkan.*
 
-```bash
-curl -X POST http://127.0.0.1:8000/ingest -F "file=@laporan.pdf"
-```
+### Sources / Similarity Score
 
-Pada Windows PowerShell, gunakan `curl.exe` untuk contoh multipart di atas.
+- 6639-Article Text-25282-1-10-20230918.pdf p. 1
+- 6639-Article Text-25282-1-10-20230918.pdf p. 2
+- 6639-Article Text-25282-1-10-20230918.pdf p. 3
 
-Contoh respons:
+### Observation
 
-```json
-{
-  "source": "laporan.pdf",
-  "pages_read": 12,
-  "chunks_stored": 84
-}
-```
+Dengan chunk size 50, jumlah chunk yang tersimpan mencapai 202. Jawaban berhasil menyebutkan algoritma KNN, tetapi informasi akurasi dan metode penanganan data tidak seimbang belum ditemukan. Source yang diambil mencakup halaman 1, 2, dan 3.
 
-| Field | Arti |
-| --- | --- |
-| `source` | Nama file yang dipakai sebagai sumber |
-| `pages_read` | Jumlah halaman dengan teks yang berhasil diekstrak |
-| `chunks_stored` | Jumlah potongan yang dimasukkan ke Qdrant |
+------------------------------------------------------
 
-### `POST /ask`
+## Chunk Size = 100
 
-Content type: `application/json`.
+### Chunks Stored
 
-```json
-{
-  "question": "Apa rekomendasi utama dalam laporan ini?"
-}
-```
+88 Chunks
 
-Contoh respons:
+### Actual Output
 
-```json
-{
-  "answer": "Rekomendasi utama adalah **memperkuat pemantauan risiko**.",
-  "sources": [
-    {
-      "source": "laporan.pdf",
-      "page": 3,
-      "score": 0.82
-    }
-  ]
-}
-```
+**1. Algoritma yang dipakai:** Peneliti menggunakan algoritma **K‑nearest neighbors (KNN)** untuk memprediksi churn pelanggan pada perusahaan telekomunikasi【Source: 6639-Article Text-25282-1-10-20230918.pdf | Page: 1】【Source: 6639-Article Text-25282-1-10-20230918.pdf | Page: 2】.  
 
-Contoh PowerShell:
+**Persentase akurasi:** Tidak terdapat informasi mengenai nilai akurasi yang diperoleh dari evaluasi model dalam dokumen yang diunggah.  
 
-```powershell
-$body = @{ question = 'Apa rekomendasi utama dalam laporan ini?' } | ConvertTo-Json
-Invoke-RestMethod -Method Post -Uri 'http://127.0.0.1:8000/ask' -ContentType 'application/json' -Body $body
-```
+**2. Penanganan data tidak seimbang:** Dokumen tidak menyebutkan metode apa pun yang diterapkan untuk mengatasi masalah data tidak seimbang (imbalancing data) sebelum pemodelan.  
 
-### `POST /brief`
+*Jawaban di atas didasarkan pada konten yang tersedia; bila ada bagian lain dari dokumen yang memuat detail tersebut, informasi tersebut tidak ditemukan dalam cuplikan yang diberikan.*
 
-Content type: `application/json`.
+### Sources / Similarity Score
 
-```json
-{
-  "topic": "Risiko operasional dan mitigasi"
-}
-```
+- 6639-Article Text-25282-1-10-20230918.pdf p. 1
+- 6639-Article Text-25282-1-10-20230918.pdf p. 2
 
-Contoh respons:
+### Observation
 
-```json
-{
-  "topic": "Risiko operasional dan mitigasi",
-  "brief": "## Summary\nRingkasan topik.\n\n## Key Points\n- Poin utama.\n\n## Source References\n- laporan.pdf, halaman 3.",
-  "sources": [
-    {
-      "source": "laporan.pdf",
-      "page": 3,
-      "score": 0.82
-    }
-  ]
-}
-```
+Jumlah chunk yang tersimpan turun menjadi 88. Jawaban masih sama seperti percobaan sebelumnya, yaitu menyebutkan KNN tanpa memberikan nilai akurasi dan metode penanganan data tidak seimbang. Source yang ditemukan hanya halaman 1 dan 2.
 
-Contoh PowerShell:
+------------------------------------------------------
 
-```powershell
-$body = @{ topic = 'Risiko operasional dan mitigasi' } | ConvertTo-Json
-Invoke-RestMethod -Method Post -Uri 'http://127.0.0.1:8000/brief' -ContentType 'application/json' -Body $body
-```
+## Chunk Size = 120
 
-### Respons kegagalan
+### Chunks Stored
 
-| Status | Kondisi |
-| --- | --- |
-| `400` | Nama file kosong atau ekstensi bukan `.pdf` pada ingestion |
-| `422` | Field wajib tidak dikirim atau tipe request tidak sesuai skema FastAPI |
-| `500` | Kegagalan ekstraksi, embedding, penyimpanan, atau proses backend lain |
+68 chunks
 
-Ingestion mengembalikan pesan exception dalam field `detail`, misalnya:
+### Actual Output
 
-```json
-{
-  "detail": "No readable text was found in the PDF."
-}
-```
+**1. Algoritma yang dipakai:** Peneliti menggunakan algoritma **K‑Nearest Neighbors (KNN)** untuk memprediksi churn pelanggan pada perusahaan telekomunikasi.  
+**Akurasi model:** Evaluasi menghasilkan **akurasi ≈ 81 %**【Source: 6639-Article Text-25282-1-10-20230918.pdf | Page 1】.
 
-Endpoint `/ask` dan `/brief` saat ini tidak membungkus exception dengan format error khusus. Kegagalan server dapat menghasilkan respons non-JSON; frontend menampilkannya sebagai pesan kegagalan umum. Field pertanyaan/topik wajib berupa string, tetapi validasi string kosong atau whitespace hanya dilakukan di frontend saat ini.
+**2. Penanganan data tidak seimbang:** Dalam dokumen yang diberikan tidak ada penjelasan mengenai metode yang diterapkan untuk mengatasi masalah data tidak seimbang sebelum pemodelan. Jadi, informasi tersebut **tidak ditemukan** dalam sumber yang di‑upload.
 
-## Struktur proyek
+### Sources / Similarity Score
+
+- 6639-Article Text-25282-1-10-20230918.pdf p. 1
+- 6639-Article Text-25282-1-10-20230918.pdf p. 2
+- 6639-Article Text-25282-1-10-20230918.pdf p. 9
+
+### Observation
+
+Jumlah chunk yang tersimpan turun lagi menjadi 68. Model berhasil memberikan informasi akurasi sekitar 81% dari halaman 1, sementara metode penanganan data tidak seimbang tetap tidak ditemukan. Hasil ini menunjukkan bahwa ukuran chunk memengaruhi informasi yang berhasil ditemukan.
+
+------------------------------------------------------
+
+## Kesimpulan Experiment Chunk Size
+
+Apa hubungan Chunk Size dengan jumlah chunk yang tersimpan?
+
+Semakin besar chunk size, semakin sedikit jumlah chunk yang tersimpan. Pada pengujian ini, chunk size 50 menghasilkan 202 chunk, chunk size 100 menghasilkan 88 chunk, dan chunk size 120 menghasilkan 68 chunk.
+
+Apakah chunk yang lebih kecil selalu menghasilkan retrieval yang lebih baik?
+
+Tidak selalu. Chunk yang lebih kecil memang bisa mengambil informasi yang lebih spesifik, tetapi konteksnya bisa terpotong. Dari hasil pengujian, chunk size 50 dan 100 belum menghasilkan informasi akurasi, sedangkan chunk size 120 berhasil menemukannya.
+
+Menurut kalian Chunk Size mana yang paling cocok?
+
+chunk size 120
+
+Kenapa?
+
+Karena pada chunk size 120, model berhasil menemukan informasi akurasi sekitar 81% yang tidak muncul pada dua percobaan sebelumnya. Jumlah chunk yang tersimpan juga lebih sedikit, yaitu 68 chunk. Namun, hasil ini berlaku untuk pengujian yang dilakukan saja dan belum membuktikan bahwa chunk size 120 selalu lebih baik untuk dokumen lain.
+
+------------------------------------------------------
+
+# Experiment 4 - Chunk Overlap
+
+Gunakan:
 
 ```text
-rag-learn/
-├── main.py                     # Route API, halaman utama, dan static files
-├── schemas.py                  # Model request pertanyaan dan brief
-├── config.py                   # Environment, lokasi data, dan parameter RAG
-├── rag.py                      # Ingestion, retrieval, prompt, dan referensi
-├── pdf_loader.py               # Ekstraksi teks PDF per halaman
-├── chunker.py                  # Pemecahan teks berbasis tokenizer
-├── embeddings.py               # Inisialisasi model dan embedding
-├── vector_store.py             # Koleksi, upsert, dan pencarian Qdrant lokal
-├── llm.py                      # Integrasi async dengan Groq
-├── requirements.txt            # Dependensi Python
-├── .env.example                # Template konfigurasi
-├── .gitignore
-├── DESIGN-SKYNIGHT-SUBTLE.md    # Spesifikasi desain website
-├── README.md
-├── static/
-│   ├── index.html              # Struktur website
-│   ├── styles.css              # Token desain, komponen, dan gaya Markdown
-│   ├── app.js                  # API client, upload, tab, dan renderer
-│   └── vendor/                 # Marked, DOMPurify, dan lisensi
-├── data/
-│   └── uploads/                # PDF yang diunggah
-└── qdrant_data/                # Database vektor lokal
+CHUNK_SIZE = 100
 ```
 
-## Penyimpanan dan siklus data
+untuk seluruh percobaan.
 
-| Data | Lokasi | Perilaku |
-| --- | --- | --- |
-| PDF asli | `data/uploads/` | Disimpan sebelum ingestion dijalankan |
-| Vektor, teks potongan, metadata | `qdrant_data/` | Persisten pada disk dan digunakan lintas sesi browser |
-| Daftar upload frontend | `sessionStorage`, key `simple-rag-session-uploads` | Metadata upload untuk sesi tab; bukan daftar seluruh koleksi |
-| Jawaban dan brief pada UI | Memori halaman / DOM | Hilang saat halaman dimuat ulang |
-| Model dan tokenizer | Cache library Hugging Face | Diunduh ketika belum tersedia |
+------------------------------------------------------
 
-Tidak ada endpoint untuk daftar seluruh dokumen, unduh PDF, hapus dokumen, atau reset koleksi. Menghapus item dari penyimpanan browser tidak menghapus data backend. Menghapus PDF dari folder upload juga tidak otomatis menghapus potongan yang sudah tersimpan di Qdrant.
+## Chunk Overlap = 0
 
-Upload ulang membuat point ID baru dan menambahkan potongan lagi, tanpa deduplikasi. Jika nama file sama, PDF pada disk ditimpa sementara potongan lama tetap ada dalam koleksi.
+### Chunks Stored
 
-Untuk memulai knowledge base baru tanpa membuang data lama, hentikan server lalu ubah `QDRANT_PATH` ke direktori baru dalam `config.py`; setelah server dijalankan kembali, unggah dokumen yang diperlukan. Data lama tetap ada pada path sebelumnya.
+81 chunks
 
-## Kustomisasi
+### Actual Output
 
-- **Warna, radius, font:** ubah token `:root` pada `static/styles.css`, dengan [spesifikasi desain](DESIGN-SKYNIGHT-SUBTLE.md) sebagai referensi.
-- **Gaya tabel dan Markdown:** ubah selector `.markdown-body` dan `.markdown-table-scroll`.
-- **Layout dan teks antarmuka:** edit `static/index.html`.
-- **Perilaku API client:** edit `static/app.js`.
-- **Prompt dan struktur respons:** edit system prompt di `rag.py`.
-- **Model generasi:** ubah `GROQ_MODEL` dalam `.env` lalu restart server.
-- **Jumlah konteks dan chunking:** ubah parameter di `config.py`. Perubahan chunking berlaku untuk ingestion baru; dokumen lama perlu diindeks ulang pada koleksi baru agar konsisten.
-- **Library frontend:** informasi versi, sumber, dan lisensi tersedia di [static/vendor/README.md](static/vendor/README.md).
+**1. Algoritma yang dipakai:** Peneliti menggunakan algoritma **K‑Nearest Neighbors (K‑NN)** untuk memprediksi churn pelanggan pada perusahaan telekomunikasi【Source: 6639-Article Text-25282-1-10-20230918.pdf | Page: 1】【Source: 6639-Article Text-25282-1-10-20230918.pdf | Page: 2】.  
 
-## Batasan aplikasi
+**Persentase akurasi:** Tidak terdapat informasi mengenai nilai akurasi yang diperoleh dari evaluasi model dalam dokumen yang diunggah.
 
-- PDF berbasis gambar belum diproses dengan OCR.
-- Pencarian memakai teks hasil ekstraksi, bukan pemahaman visual terhadap gambar atau layout tabel PDF.
-- Seluruh dokumen memakai satu knowledge base; belum ada autentikasi, pemisahan pengguna, atau filter dokumen per pertanyaan.
-- Tidak ada riwayat percakapan atau konteks pertanyaan sebelumnya yang dikirim ke LLM.
-- Respons belum menggunakan streaming.
-- Retrieval mengambil potongan terdekat tanpa threshold relevansi atau reranking.
-- Prompt menginstruksikan LLM memakai konteks saja, tetapi kualitas jawaban tetap dipengaruhi retrieval dan perilaku model.
-- File upload dibaca penuh ke memori, tanpa batas ukuran khusus pada kode aplikasi.
-- Ingestion menjalankan ekstraksi dan embedding secara sinkron dalam handler; belum ada antrean background.
-- Qdrant lokal dipakai oleh satu proses. Deployment multiproses membutuhkan perubahan arsitektur penyimpanan.
-- Dependensi Python dalam `requirements.txt` belum dipin ke versi tertentu.
-- Aplikasi belum menyediakan kontrol akses dan pembatasan permintaan untuk layanan publik.
+**2. Penanganan data tidak seimbang:** Dokumen tidak menyebutkan metode apa pun yang diterapkan untuk mengatasi masalah data tidak seimbang (imbalancing data) sebelum pemodelan.
 
-## Pemecahan masalah
+### Sources / Similarity Score
 
-### `GROQ_API_KEY` belum diisi atau ditolak
+- 6639-Article Text-25282-1-10-20230918.pdf p. 1
+- 6639-Article Text-25282-1-10-20230918.pdf p. 2
+- 6639-Article Text-25282-1-10-20230918.pdf p. 9
 
-Isi API key pada `.env` di root proyek, pastikan key aktif, lalu restart server. Jangan menaruh key di file frontend atau membagikan `.env`.
+### Observation
 
-### Model Groq tidak tersedia / rate limit
+Jawaban menyebutkan algoritma KNN, tetapi informasi akurasi dan metode penanganan data tidak seimbang tidak ditemukan. Jumlah chunk yang tersimpan sebanyak 81. Source yang ditemukan mencakup halaman 1, 2, dan 9.
 
-Gunakan model yang dapat diakses akun Anda melalui `GROQ_MODEL`. Untuk rate limit, tunggu sebelum mengirim ulang dan perhatikan batas akun. Detail exception dapat dilihat pada terminal server.
+------------------------------------------------------
 
-### Startup lama atau pengunduhan model gagal
+## Chunk Overlap = 20
 
-Pastikan koneksi internet tersedia dan cache model dapat ditulis. Model embedding serta tokenizer dimuat saat modul backend diimpor, sehingga website belum tersedia sebelum inisialisasi selesai.
+### Chunks Stored
 
-### `No readable text was found in the PDF.`
+88 chunks
 
-Dokumen tidak menghasilkan teks yang dapat diproses. Gunakan PDF berbasis teks atau lakukan OCR terlebih dahulu. PDF rusak atau terenkripsi juga dapat memerlukan perbaikan sebelum diunggah.
+### Actual Output
 
-### Direktori Qdrant sedang dipakai
+**1. Algoritma yang dipakai:** Peneliti menggunakan algoritma **K‑nearest neighbors (KNN)** untuk memprediksi churn pelanggan pada perusahaan telekomunikasi【Source: 6639-Article Text-25282-1-10-20230918.pdf | Page: 1】【Source: 6639-Article Text-25282-1-10-20230918.pdf | Page: 2】.  
 
-Hentikan proses lain yang memakai `qdrant_data/`. Jalankan satu instance backend dengan satu worker untuk penyimpanan lokal.
+**Akurasi model:** Persentase akurasi hasil evaluasi model tidak tercantum dalam dokumen yang diunggah.  
 
-### Daftar upload kosong setelah menutup tab
+**2. Penanganan data tidak seimbang:** Dokumen tidak menyebutkan metode apa pun yang diterapkan untuk mengatasi masalah data tidak seimbang (imbalancing data) sebelum pemodelan.  
 
-Daftar UI berasal dari sesi tab browser. Koleksi backend tetap ada di disk dan masih dapat ditelusuri melalui pertanyaan atau brief.
+### Sources / Similarity Score
 
-### Respons kurang relevan
+- 6639-Article Text-25282-1-10-20230918.pdf p. 1
+- 6639-Article Text-25282-1-10-20230918.pdf p. 2
 
-Gunakan pertanyaan lebih spesifik, pastikan teks PDF dapat diekstrak, dan perhatikan sumber yang dikembalikan. Sesuaikan parameter retrieval atau gunakan knowledge base baru yang lebih fokus bila dokumen bercampur.
+### Observation
 
-### Markdown masih muncul sebagai teks biasa
+Jumlah chunk bertambah menjadi 88. Jawabannya masih sama seperti overlap 0, tetapi source yang ditemukan hanya halaman 1 dan 2. Penambahan overlap belum membuat model menemukan informasi akurasi atau metode penanganan data tidak seimbang.
 
-Muat ulang halaman setelah perubahan asset frontend. Pastikan file `static/vendor/marked.umd.js` dan `static/vendor/purify.min.js` ikut disalin ketika memindahkan proyek. Fallback teks digunakan bila library tidak termuat. Agar tabel dirender, output harus memakai sintaks tabel Markdown yang valid.
+------------------------------------------------------
 
-### Tampilan font berbeda
+## Chunk Overlap = 40
 
-Font berasal dari Google Fonts. Jika akses jaringan ke layanan tersebut tidak tersedia, browser menggunakan font fallback; fungsi aplikasi dan rendering Markdown lokal tetap tersedia.
+### Chunks Stored
+
+183 chunks
+
+### Actual Output
+
+**1. Algoritma yang dipakai:** Peneliti menggunakan algoritma **K‑nearest neighbors (KNN)** untuk memprediksi churn pelanggan [Source: 6639‑Article Text‑25282‑1‑10‑20230918.pdf, p. 1].
+
+**Akurasi model:** Persentase akurasi hasil evaluasi model tidak tercantum dalam dokumen yang di‑upload, sehingga tidak dapat disampaikan.
+
+**2. Penanganan data tidak seimbang:** Dokumen tidak menyebutkan metode apa pun yang diterapkan untuk mengatasi masalah imbalancing data sebelum pemodelan.
+
+### Sources / Similarity Score
+
+- 6639-Article Text-25282-1-10-20230918.pdf p. 1
+- 6639-Article Text-25282-1-10-20230918.pdf p. 2
+
+### Observation
+
+Jumlah chunk meningkat cukup banyak menjadi 183. Jawaban tetap menyebutkan KNN, sedangkan informasi akurasi dan metode penanganan data tidak seimbang masih belum ditemukan. Source yang digunakan juga hanya halaman 1 dan 2, jadi penambahan jumlah chunk belum memberikan informasi baru pada jawaban.
+
+------------------------------------------------------
+
+## Kesimpulan Experiment Chunk Overlap
+
+Apa pengaruh Chunk Overlap yang kalian lihat?
+
+Semakin besar nilai overlap, semakin banyak chunk yang tersimpan. Pada percobaan ini, jumlahnya meningkat dari 81 chunk pada overlap 0 menjadi 88 pada overlap 20, lalu 183 pada overlap 40. Tapi isi jawaban yang dihasilkan masih hampir sama.
+
+Apakah overlap yang lebih besar selalu menghasilkan jawaban yang lebih baik?
+
+Overlap yang besar memang bisa menjaga konteks antar-potongan teks, tapi juga membuat lebih banyak teks berulang. Terlihat overlap 40 menghasilkan chunk paling banyak, tapi belum memberikan informasi tambahan pada jawaban.
+
+Menurut kalian nilai mana yang paling cocok?
+
+Overlap 20
+
+------------------------------------------------------
+
+# Final Configuration
+
+Setelah seluruh eksperimen, pilih konfigurasi yang menurut kalian menghasilkan hasil terbaik untuk PDF yang digunakan.
+
+```text
+Temperature: 0.0
+TOP_K: 4
+Chunk Size: 128
+Chunk Overlap: 40
+```
+
+------------------------------------------------------
+
+# Final Questions
+
+### 1. Parameter mana yang paling terasa memengaruhi hasil aplikasi kalian?
+
+Chunk Size.
+
+### 2. Apakah Temperature memengaruhi Retrieval atau Generation? Jelaskan.
+
+Temperature mempengaruh bagaimana llm menghasilkan jawaban (Generation). Dari eksperimen yang sudah dilakukan dapat terlihat jawaban dan cara penyampaian sedikit berbeda tapi tidak mempengaruhi detail informasi yang disampaikan dan sumber yang digunakan (Retrieval).
+
+### 3. Apakah TOP_K yang lebih besar selalu menghasilkan jawaban yang lebih baik?
+
+Tidak juga, Hasil eksperimen TOP_K 1, 4, dan 8 menghasilkan jawaban yang hampir sama. TOP_K yang lebih besar memang mengambil lebih banyak context, tetapi kalau informasi tambahannya kurang relevan, jawaban belum tentu menjadi lebih baik
+
+### 4. Apa yang terjadi ketika Chunk Size dibuat lebih kecil?
+
+Jumlah chunk yang dihasilkan menjadi lebih banyak. Chunk size 50 menghasilkan 202 chunk, ukuran 100 menghasilkan 88 chunk, dan ukuran 120 menghasilkan 68 chunk. Chunk yang lebih kecil bisa memberikan informasi yang lebih spesifik, tetapi konteksnya juga bisa terpotong.
+
+### 5. Setelah melakukan eksperimen, apa fungsi Chunk Overlap menurut pemahaman kalian?
+
+Fungsi Chunk Overlap adalah untuk menjaga konteks antar-potongan teks. Terlihat overlap 40 menghasilkan chunk paling banyak, tapi belum memberikan informasi tambahan pada jawaban.
+
+### 6. Kenapa perubahan Chunk Size dan Chunk Overlap membutuhkan ingestion ulang?
+
+Karena perubahan Chunk Size dan Chunk Overlap mengubah cara dokumen diproses menjadi potongan-potongan teks (chunks) sebelum dibuat embedding dan disimpan di Qdrant. 
+
+### 7. Kenapa perubahan Temperature tidak membutuhkan ingestion ulang?
+
+Karena temperature digunakan saat LLM menghasilkan jawaban, bukan saat dokumen diproses dan disimpan.
+
+### 8. Menurut kalian, apakah ada satu konfigurasi RAG yang akan selalu paling bagus untuk semua jenis dokumen?
+
+Menurut saya, tidak ada satu konfigurasi yang selalu paling bagus untuk semua dokumen. Setiap dokumen punya struktur dan informasi yang berbeda. Jadi, parameter RAG perlu disesuaikan dengan dokumen yang digunakan dan diuji untuk mendapatkan hasil terbaik.
+
+------------------------------------------------------
+
+# Personal Reflection
+
+### Bagian eksperimen mana yang hasilnya paling berbeda dari dugaan kalian?
+
+Eksperimen Chunk Size memberikan hasil yang paling berbeda dari dugaan awal. Saat menggunakan chunk size 50 dan 100, model belum menemukan informasi akurasi. Saya kira chunk size 120 tidak akan memberikan informasi akurasi juga. Ternyata malah chunk size yang paling besar justru mendapatkan informasi tentang akurasi tersebut.
+
+### Parameter mana yang awalnya kalian anggap tidak terlalu penting tetapi ternyata berpengaruh?
+
+Saya awalnya menganggap TOP_K tidak terlalu penting karena dari eksperimen TOP_K 1, 4, dan 8 menghasilkan jawaban yang hampir sama. Ternyata TOP_K cukup penting karena mempengaruhi berapa banyak konteks yang diberikan kepada LLM.
+
+### Setelah mengerjakan tugas ini, bagaimana kalian menjelaskan hubungan antara Retrieval dan Generation pada RAG?
+
+Retrieval bertugas mencari informasi dari dokumen, sedangkan Generation menyusun informasi tersebut menjadi jawaban. Keduanya saling berhubungan karena jawaban LLM bergantung pada konteks yang ditemukan Retrieval.
+
+
+### Jika aplikasi ini dikembangkan lebih lanjut, parameter atau bagian apa lagi yang ingin kalian coba?
+
+Saya ingin mencoba dengan dokumen lain yang memiliki struktur berbeda dan pertanyaan yang mudah dijawab.
+
+------------------------------------------------------
+
+# AI Usage
+
+### AI tools yang digunakan
+
+Gemini.
+
+### AI digunakan untuk membantu bagian apa?
+
+Membantu analisis dan mencari alasan mengenai hasil eksperimen.
+
+### Bagian eksperimen mana yang kalian lakukan dan evaluasi sendiri?
+
+Semua bagian eksperimen saya kerjakan sendiri.
